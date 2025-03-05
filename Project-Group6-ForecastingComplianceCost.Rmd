@@ -1,0 +1,430 @@
+---
+title: "Forecasting Compliance Burden : A Data-Driven Approach to Regulatory Cost Estimation"
+author: "Group 6 Team Members-  Arjun Ghosh, Sujoy Banerjee, Saurabh Pal, Shaheryar Nadeem, Shubha Kotian"
+date: "2024-12-05"
+output: html_document
+output_file: "Project-Group6-ForecastingComplianceCost.html"
+---
+## Problem Description
+This project aims to investigate the estimated compliance costs associated with U.S. federal regulations. Specifically, the goal is to categorize the regulatory compliance burden into two tiers: low and high-cost categories. The classification will be based on a combination of factors, including regulatory restrictiveness, complexity, and industry relevance. By developing a predictive model to categorize these compliance costs, the project seeks to provide a data-driven framework for understanding the impact of federal regulations on businesses.
+
+## Data Source
+
+-   **Public Data Link**: https://drive.google.com/drive/folders/19e-L1y1K2X7JW27ZsErubYz0OFrW06tW?usp=drive_link
+
+## Data Summary
+
+The dataset contains 21 features, which are described below:
+
+-   **document_id**: A unique identifier for each regulatory document.
+
+-   **year**: The year associated with the document, likely indicating its publication or enforcement year.
+
+-   **document_reference**: A reference to the specific title and part of the regulation, providing context for its placement within federal regulations.
+
+-   **title**: The title of the document or regulation.
+
+-   **part**: Indicates the specific part of the regulation referenced.
+
+-   **agency_parent_name**: The name of the parent agency overseeing the regulation.
+
+-   **agency_name**: The specific agency responsible for the regulation.
+
+-   **restrictions**: A numerical value quantifying the number of restrictions in the document.
+
+-   **wordcount**: The total number of words in the document.
+
+-   **shall**: The frequency of the word "shall" in the document, indicating mandatory requirements.
+
+-   **must**: The frequency of the word "must" in the document, another term for mandatory compliance.
+
+-   **may_not**: The frequency of the phrase "may not," which indicates prohibitive clauses.
+
+-   **prohibited**: The frequency of the word "prohibited," highlighting explicit prohibitions.
+
+-   **required**: The frequency of the word "required," indicating mandatory conditions.
+
+-   **restrictions_v2**: A secondary measure or updated version of the restrictions metric.
+
+-   **sentence_length**: The average length of sentences in the document, possibly indicating complexity.
+
+-   **conditionals_per_100_sentences**: The number of conditional clauses (e.g., "if," "when") per 100 sentences, reflecting the level of conditional requirements.
+
+-   **last_updated**: The date the document was last updated, showing its currency.
+
+-   **long_word_score**: A score based on the frequency of long words, potentially indicating the document's complexity.
+
+-   **acronyms_per_100_sentences**: The number of acronyms used per 100 sentences, reflecting the technical or specialized nature of the document.
+
+-   **unique_acronyms**: The count of unique acronyms in the document, which could indicate the breadth of topics or terminologies covered.
+
+**Example Record**: The dataset includes records like the one provided, which contains information on a document from 2022, titled "Title 1, Part 1," with no restrictions or mandatory terms and a word count of 256. The document is associated with the Administrative Committee of Federal Register and was last updated on 1985-03-28.
+
+This dataset can be used to analyze the complexity, restrictiveness, and characteristics of federal regulations, offering valuable insights for compliance and policymaking.
+
+## Exploration and Discussion
+
+Since the dataset lacked a direct `compliance cost` column, we derived it indirectly through feature engineering. The goal was to evaluate compliance burdens based on key factors, such as the frequency of restrictive and mandatory terms, and classify regulations into "Compliant" and "Non-Compliant" categories. The following steps were performed-
+
+---
+
+### Step 1: Data Reading and Initialization
+We started by loading the raw dataset from the API using API-Key and initialized it for preprocessing and analysis.
+
+### Step 2: Data Cleaning and Preprocessing
+1. **Handling Missing Values**:  
+   To ensure data integrity, missing values in numerical columns were replaced with the column's median. This approach helps avoid biases and preserves the dataset's statistical characteristics.
+
+2. **Zero-Value Correction**:  
+   Numerical columns such as `wordcount` were adjusted to avoid zero values, ensuring no errors during calculations in subsequent steps.
+
+### Step 3: Feature Engineering
+1. **Score Calculation**:  
+   A new `Score` column was created to quantify the compliance burden of each document. This score was computed using the weighted frequency of significant terms (`shall`, `required`) and non-significant terms (`may_not`, `prohibited`), normalized by the `wordcount`.  
+   - **Significant Terms**: Assigned a higher weight due to their mandatory nature.  
+   - **Non-Significant Terms**: Assigned a lower weight as they indicate restrictions rather than obligations.
+
+2. **Compliance Classification**:  
+   Using the calculated `Score`, a `Compliance` column was created to classify documents:  
+   - **Compliant**: If the score was above the mean.  
+   - **Non-Compliant**: If the score was below or equal to the mean.
+
+### Step 4: Data Simplification
+To simplify the dataset and focus on relevant attributes, the intermediate `Score` column was dropped after creating the `Compliance` column.
+
+### Step 5: Saving the Processed Data
+The processed dataset was saved as a new file for future use. This file includes the newly created `Compliance` column, which facilitates further analysis and modeling.
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!require(DALEX)) install.packages("DALEX")
+if (!require(DALEXtra)) install.packages("DALEXtra")
+library(DALEX)
+library(DALEXtra)
+library(ggplot2)
+library(knitr)
+library(h2o)
+library(dplyr)
+library(DALEX)
+library(ggplot2)
+```
+
+## 1. Load Processed Data
+```{r 1 }
+# Load the post-processed data
+data <- read.csv("Project-Group6-ForecastingComplianceCost-Processed.csv")
+
+# Display the first 10 rows of the data
+head(data, 10) %>%
+  kable(caption = "First 10 Rows of Processed Data", align = 'c')
+
+# Visualize feature distributions
+library(ggplot2)
+
+ggplot(data, aes(x = Compliance)) +
+  geom_bar(fill = "red", color = "black", width = 0.6) +
+  ggtitle("Distribution of Compliance") +
+  xlab("Compliance Categories") +
+  ylab("Frequency") +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, face = "bold", size = 14),
+    axis.title.x = element_text(size = 12),
+    axis.title.y = element_text(size = 12),
+    axis.text = element_text(size = 10)
+  )
+
+
+
+```
+
+
+## Machine Learning Procedure Summary
+The model with the highest cross-validation AUC was selected as the best-performing model and this pre-trained H2O model is used to predict compliance categories. 
+
+The model pipeline involves:
+- Feature engineering (e.g., keywords, sentence complexity)
+- Splitting the data into training, validation, and test sets
+- Model selection based on metrics like AUC and MSE
+
+## Sequence of Execution
+
+1. **Feature Selection**
+   - Feature selection is performed to identify the most relevant features for predicting compliance categories. This may involve selecting keywords or calculating sentence complexity.
+
+2. **Model Training Using Gradient Boosting (H2O GBM)**
+   - The data is used to train a model using the H2O Gradient Boosting (GBM) algorithm. The model is evaluated using performance metrics such as AUC (Area Under the Curve) and MSE (Mean Squared Error).
+
+3. **Explainable AI (XAI) Techniques**
+   - After training, Explainable AI (XAI) techniques are applied to interpret the model’s predictions. This helps provide insights into how the model is making decisions and ensures transparency.
+
+## Load Pre-trained H2o Model
+```{r 2}
+# Initialize h2o
+h2o.init()
+
+# Load the saved h2o model
+model_path <- "Project-Group6-ForecastingComplianceCost-GBM.h2o"  # Update this to match the best model file
+best_model <- h2o.loadModel(model_path)
+
+# Print the model summary
+summary(best_model)
+```
+
+## AI/ML Result Summary and Discussion - Model Performance 
+
+```{r 3}
+# Evaluate the model on the test set
+processed_data <- as.h2o(data)
+splits <- h2o.splitFrame(processed_data, ratios = c(0.7, 0.15), seed = 123)
+test <- splits[[3]]
+
+performance <- h2o.performance(best_model, newdata = test)
+
+# Display performance metrics
+auc <- h2o.auc(performance)
+mse <- h2o.mse(performance)
+
+print(paste("AUC:", auc))
+print(paste("MSE:", mse))
+
+```
+
+
+```{r 4,warning=FALSE}
+# Convert predictors to a data frame
+predictors <- c("year", "part", "restrictions", "wordcount", "shall", "must",
+                "may_not", "prohibited", "required", "restrictions_v2", 
+                "sentence_length", "conditionals_per_100_sentences", 
+                "long_word_score", "acronyms_per_100_sentences", "unique_acronyms")
+
+predictors_data <- as.data.frame(test[, predictors])  # Replace 'predictors_data' with the correct dataset
+
+
+# Convert target_y to a numeric vector (0 for "Compliant", 1 for "Non-Compliant")
+target_y <- ifelse(as.character(test$Compliance) == "Compliant", 0, 1)
+
+# Verify the structure
+print("Structure of predictors:")
+print(str(predictors_data))
+
+print("Structure of target:")
+print(str(target_y))
+
+# Create the explainer
+explainer <- explain_h2o(
+  model = best_model,
+  data = predictors_data,
+  y = target_y,
+  label = "Best Model Explanation"
+)
+
+```
+# XAI Method 1: Feature Importance
+```{r 5,results='hide',warning=FALSE}
+# Compute feature importance
+feature_importance <- model_parts(explainer)
+
+```
+
+
+```{r 5.1}
+
+# Plot feature importance
+plot(feature_importance) +
+  ggtitle("Feature Importance for Best Model")
+
+```
+# XAI Method 2: Feature Importance
+```{r 6}
+# Load necessary libraries
+library(DALEX)
+library(DALEXtra)
+library(ggplot2)
+
+# Ensure the predictors are in the same format as the training dataset
+# Create new_application using a sample observation from the test dataset
+new_application <- as.data.frame(test[1, predictors])  # Replace [1,] with desired row index
+
+# Add any necessary interaction features or preprocess as needed
+# Check for any missing columns and add placeholder values
+missing_cols <- setdiff(names(predictors_data), names(new_application))
+if (length(missing_cols) > 0) {
+  for (col in missing_cols) {
+    new_application[[col]] <- NA
+  }
+}
+
+# Reorder columns to match the training dataset
+new_application <- new_application[, names(predictors_data)]
+```
+
+```{r shap, results='hide', warning=FALSE}
+# Proceed with SHAP analysis
+h2o_exp_shap <- predict_parts(
+  explainer = explainer,  # DALEX explainer created earlier
+  new_observation = new_application,
+  type = "shap",          # Specify SHAP type
+  B = 5                   # Number of iterations for approximation
+)
+```
+
+```{r plot}
+# Visualize the SHAP explanation
+plot(h2o_exp_shap) + ggtitle("SHAP Explanation for New Observation")
+```
+
+
+### Top Influential Features
+- **`shall = 0`**:  
+  The absence of the `shall` keyword significantly reduces the likelihood of compliance. This aligns with the expectation that such a term is crucial for defining obligations in regulatory documents.
+
+- **`wordcount = 3`**:  
+  A low `wordcount` has a strong negative contribution, indicating that extremely short documents are less likely to be compliant. This suggests that lengthier documents are more likely to provide the necessary details for compliance.
+
+- **`required = 0`**:  
+  The absence of the `required` keyword negatively impacts compliance likelihood. This indicates that the presence of `required` is a strong indicator for compliance.
+
+---
+
+### Lesser Influential Features
+- **`restrictions_v2` and `restrictions`**:  
+  These features provide minor positive contributions, indicating that while they are not dominant factors, they still have some influence on compliance likelihood.
+
+- **`may_not`, `must`, and `prohibited`**:  
+  These features contribute minimally to the predictions. They may play a secondary or indirect role in determining compliance.
+
+---
+
+### Neutral or Minimal Influence
+- **`unique_acronyms` and `sentence_length`**:  
+  These features show negligible contributions for compliance in this context. Their influence on the prediction is minimal, suggesting they are not critical factors for compliance classification.
+
+---
+
+## General Observations
+
+### Importance of Specific Keywords
+- Features such as `shall`, `required`, and `wordcount` are critical for the model's predictions.  
+- The presence of these terms and the overall length of the document significantly affect the likelihood of compliance.
+
+### Short Documents Tend to Be Non-Compliant
+- The negative impact of a low `wordcount` suggests that shorter documents often lack the necessary detail or structure required for compliance. Longer documents appear to be more comprehensive and better aligned with compliance requirements.
+
+### Keywords Drive Predictions
+- The presence or absence of specific terms (e.g., `shall`, `required`) heavily influences the prediction.  
+- This behavior aligns with how regulatory and compliance documents are evaluated in real-world scenarios, where specific keywords often dictate compliance requirements.
+
+---
+
+
+
+```{r 6.1,results='hide',warning=FALSE}
+# Enhanced Partial Dependence Profile Visualization for 'sentence_length'
+library(ggplot2)
+
+# Generate the PDP for the variable 'sentence_length'
+h2o_exp_pdp <- model_profile(
+  explainer = explainer, 
+  variables = "sentence_length"
+)
+
+```
+
+
+```{r 6.2}
+
+# Improved Plot
+plot(h2o_exp_pdp) + 
+  ggtitle("Partial Dependence Profile for 'Sentence Length'") +  # Updated title
+  xlab("Sentence Length") +  # X-axis label
+  ylab("Average Prediction") +  # Y-axis label
+  theme_minimal() +  # Minimal theme for better readability
+  theme(
+    plot.title = element_text(size = 16, face = "bold"),  # Larger and bold title
+    axis.title.x = element_text(size = 14),  # Larger X-axis title
+    axis.title.y = element_text(size = 14),  # Larger Y-axis title
+    axis.text.x = element_text(size = 12),  # Larger X-axis ticks
+    axis.text.y = element_text(size = 12)   # Larger Y-axis ticks
+  )
+```
+
+## Insight and Explanation of the Partial Dependence Profile for sentence_length
+## Purpose of the Graph
+
+The Partial Dependence Profile (PDP) for the feature `sentence_length` illustrates its relationship with the average prediction made by the best-performing model. This graph helps to understand how varying the values of `sentence_length` influences the likelihood of the target outcome (e.g., compliance vs. non-compliance) predicted by the model.
+
+---
+
+## Insights
+
+### 1. Flat Trend at Lower Values
+- For `sentence_length` values close to 0 (shorter sentences), the average prediction remains relatively stable.
+- This suggests that extremely short sentences have minimal influence on the model's prediction.
+
+### 2. Slight Variations in the Mid-Range
+- As `sentence_length` increases beyond 25, there are some fluctuations in the prediction.
+- This indicates that medium-length sentences introduce variability in the compliance likelihood, as the model starts factoring in this feature more heavily.
+
+### 3. Sharp Increase Beyond a Threshold
+- Beyond a `sentence_length` of approximately 50, there is a noticeable increase in the predicted probability.
+- This implies that longer sentences have a more significant impact on the model, increasing the likelihood of compliance.  
+- The increase suggests a potential association between detailed or verbose content (as reflected in longer sentences) and higher compliance rates.
+
+### 4. Plateau at Higher Values
+- At very high values of `sentence_length` (around 75 and above), the predictions stabilize again.
+- This plateau indicates that once a sentence becomes sufficiently long, additional length does not add further predictive power for compliance.
+
+---
+
+## Implications for Your Use Case
+
+### 1. Feature Importance
+- The feature `sentence_length` is influencing the model's predictions, particularly for longer sentences.  
+- This suggests that `sentence_length` might act as a proxy for additional information or complexity in the document, which can impact compliance likelihood.
+
+### 2. Practical Interpretation
+- **Longer Sentences**: Likely represent regulatory or contractual content that is more detailed and thus more likely to align with compliance requirements.  
+- **Shorter Sentences**: May be less descriptive, leading to lower compliance likelihood.
+
+### 3. Actionable Insights
+- To improve compliance, focus on ensuring adequate sentence lengths in critical sections of a document.  
+- This might involve rephrasing overly concise statements to add more clarity and detail.
+
+### 4. Model Behavior Understanding
+- The graph provides transparency into how the model uses `sentence_length` to drive predictions.  
+- This understanding is critical for interpretability and trust in the model's decision-making process.
+
+---
+
+# XAI Method 2: Prediction Explanation
+```{r 7,results='hide',warning=FALSE}
+prediction_explanation <- predict_parts(explainer, new_application)
+```
+```{r 8}
+plot(prediction_explanation) + ggtitle("Prediction Explanation for New Observation")
+```
+
+## Conclusion
+
+The H2O-based predictive model successfully categorized compliance costs with strong performance metrics, achieving a high AUC and low MSE on the test data. Key predictors, such as the frequency of terms like *shall* and *required*, along with document length, played a significant role in determining compliance.
+
+### Insights from Explainable AI
+- Explainable AI techniques provided valuable insights into feature importance and interactions.
+- These techniques emphasized the importance of clear, concise, and structured documentation to improve compliance likelihood.
+
+### Practical Applicability
+The findings underscore the practical applicability of our model in regulatory environments:
+- **Enhanced Compliance Strategies**: Organizations can leverage the model to focus on impactful document features, thereby reducing risks and associated compliance costs.
+- **Feature-Driven Insights**: The focus on key predictors enables targeted improvements in documentation, aligning with regulatory expectations.
+
+### Future Work
+- **Dataset Expansion**: Extending the model to new datasets can validate its robustness and adaptability.
+- **Exploration of Additional Features**: Incorporating new features may further enhance model accuracy and interpretability.
+- **Broader Applications**: Exploring the model's utility in other domains of compliance and regulatory analysis could widen its impact.
+
+---
+
+The combination of advanced machine learning techniques and explainable AI has paved the way for a data-driven approach to compliance cost prediction, providing actionable insights for organizations to optimize their compliance strategies.
